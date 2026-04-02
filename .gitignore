@@ -1,0 +1,6 @@
+config.ini
+*.log
+trades_log.xlsx
+__pycache__/
+*.pyc
+*.exe
