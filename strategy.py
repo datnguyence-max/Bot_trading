@@ -41,7 +41,8 @@ class Strategy:
         x      = abs(candle_t["close"] - candle_t["open"])    # body T-1
         a_prev = candle_prev["tick_volume"]         # volume T-2
         x_prev = abs(candle_prev["close"] - candle_prev["open"])  # body T-2
-        m      = self.cfg.VOLUME_MULTIPLIER
+        m_vol  = self.cfg.VOLUME_MULTIPLIER
+        m_body = self.cfg.BODY_MULTIPLIER
 
         # ── Kiểm tra cửa sổ thời gian ────────────────────────────────────────
         candle_open_time = candle_now["time"]
@@ -52,14 +53,21 @@ class Strategy:
             log.info(f"{tag} Đã qua cửa sổ vào lệnh: {seconds_since_open:.0f}s > {self.cfg.ENTRY_WINDOW_SEC}s — bỏ qua")
             return None
 
-        # ── Nến Doji: body T-1 = 0 → bỏ qua ─────────────────────────────────
-        if x == 0:
-            log.info(f"{tag} [Signal] T-1 Doji ❌ — bỏ qua")
+        # ── Kiểm tra thân nến T-2 tối thiểu theo symbol ─────────────────────
+        min_body_t2 = self.cfg.MIN_BODY_T2.get(symbol, 0)
+        if min_body_t2 > 0 and x_prev < min_body_t2:
+            log.info(f"{tag} [Signal] Thân T-2 {x_prev:.3f} < {min_body_t2} ❌ — bỏ qua")
             return None
 
+        # ── Kiểm tra thân T-1 không quá lớn so với T-2 ───────────────────────
+        if self.cfg.BODY_MULTIPLIER_MAX > 0 and x_prev > 0:
+            if x >= self.cfg.BODY_MULTIPLIER_MAX * x_prev:
+                log.info(f"{tag} [Signal] Thân T-1 {x:.3f} >= {self.cfg.BODY_MULTIPLIER_MAX}×{x_prev:.3f} ❌ — bỏ qua")
+                return None
+
         # ── Đánh giá từng điều kiện ───────────────────────────────────────────
-        body_ok  = (x_prev == 0) or (x > m * x_prev)   # body T-1 đủ lớn
-        vol_ok   = a > m * a_prev                        # volume T-1 đủ lớn
+        body_ok  = (x_prev == 0) or (x > m_body * x_prev)  # body T-1 đủ lớn
+        vol_ok   = a > m_vol * a_prev                        # volume T-1 đủ lớn
         trend_ok = candle_t["close"] > candle_t["open"]  # T-1 tăng
         trend_dn = candle_t["close"] < candle_t["open"]  # T-1 giảm
 
@@ -85,9 +93,9 @@ class Strategy:
 
         log.info(
             f"{tag} [Signal] "
-            f"Body {x:.5f} >= {m}×{x_prev:.5f} {c_body} | "
-            f"Vol {a:.0f} >= {m}×{a_prev:.0f} {c_vol} | "
-            f"T-1 {dir_t1} | T-2 {dir_t2}"
+            f"Body {x:.3f} >= {m_body}×{x_prev:.3f} {c_body} | "
+            f"Vol {a:.0f} >= {m_vol}×{a_prev:.0f} {c_vol} | "
+            f"T-1 {dir_t1} | T-2 {dir_t2} (minBody>{min_body_t2}✅)"
             f" → {icon}"
         )
 
